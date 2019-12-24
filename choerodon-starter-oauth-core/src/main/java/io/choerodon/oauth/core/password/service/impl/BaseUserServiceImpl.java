@@ -1,12 +1,13 @@
 package io.choerodon.oauth.core.password.service.impl;
 
-import io.choerodon.core.exception.CommonException;
-import io.choerodon.oauth.core.password.domain.BaseUserDO;
-import io.choerodon.oauth.core.password.mapper.BaseUserMapper;
-import io.choerodon.oauth.core.password.service.BaseUserService;
+import java.util.Date;
+
 import org.springframework.stereotype.Service;
 
-import java.util.Date;
+import io.choerodon.core.exception.CommonException;
+import io.choerodon.oauth.core.password.domain.BaseUserDTO;
+import io.choerodon.oauth.core.password.mapper.BaseUserMapper;
+import io.choerodon.oauth.core.password.service.BaseUserService;
 
 /**
  * @author wuguokai
@@ -21,8 +22,8 @@ public class BaseUserServiceImpl implements BaseUserService {
     }
 
     @Override
-    public BaseUserDO lockUser(Long userId, long lockExpireTime) {
-        BaseUserDO user = baseUserMapper.selectByPrimaryKey(userId);
+    public BaseUserDTO lockUser(Long userId, long lockExpireTime) {
+        BaseUserDTO user = baseUserMapper.selectByPrimaryKey(userId);
         user.setLocked(true);
         user.setLockedUntilAt(new Date(System.currentTimeMillis() + lockExpireTime * 1000));
         if (baseUserMapper.updateByPrimaryKeySelective(user) != 1) {

@@ -4,24 +4,28 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cloud.netflix.ribbon.RibbonClients;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+import io.choerodon.feign.encoder.PageRequestQueryConfig;
 
 /**
  * 配置ribbon client rule
+ *
  * @author xausky
  */
 @EnableWebMvc
 @Configuration
 @ComponentScan
-@RibbonClients(defaultConfiguration = CustomMetadataRule.class)
+@RibbonClients(defaultConfiguration = CustomRibbonConfiguration.class)
 @EnableConfigurationProperties({CommonProperties.class})
-public class HystrixInterceptorAutoConfiguration extends WebMvcConfigurerAdapter {
+@Import(PageRequestQueryConfig.class)
+public class HystrixInterceptorAutoConfiguration implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(new HystrixHeaderInterceptor());
     }
-
 }

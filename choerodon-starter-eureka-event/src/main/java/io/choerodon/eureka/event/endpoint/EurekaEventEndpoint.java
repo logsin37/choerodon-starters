@@ -1,11 +1,12 @@
 package io.choerodon.eureka.event.endpoint;
 
-import io.choerodon.eureka.event.EurekaEventPayload;
-import io.choerodon.swagger.annotation.Permission;
-import io.swagger.annotations.ApiOperation;
+import java.util.List;
+
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import io.choerodon.core.annotation.Permission;
+import io.choerodon.eureka.event.EurekaEventPayload;
+import io.swagger.annotations.ApiOperation;
 
 @RestController
 @RequestMapping(value = "/v1/eureka/events")

@@ -1,10 +1,10 @@
 package io.choerodon.oauth.core.password;
 
-import io.choerodon.oauth.core.password.domain.BasePasswordPolicyDO;
-
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+
+import io.choerodon.oauth.core.password.domain.BasePasswordPolicyDTO;
 
 /**
  * @author wuguokai
@@ -47,7 +47,7 @@ public class PasswordPolicyMap {
         return enableSecurity;
     }
 
-    public static PasswordPolicyMap parse(BasePasswordPolicyDO policy) {
+    public static PasswordPolicyMap parse(BasePasswordPolicyDTO policy) {
         boolean enablePassword = policy.getEnablePassword();
         boolean enableSecurity = policy.getEnableSecurity();
         Map<String, Object> passwordMap = new LinkedHashMap<>();

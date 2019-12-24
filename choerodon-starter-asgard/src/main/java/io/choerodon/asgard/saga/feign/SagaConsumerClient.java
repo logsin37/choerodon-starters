@@ -1,17 +1,18 @@
 package io.choerodon.asgard.saga.feign;
 
+import java.util.List;
+
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.*;
+
 import io.choerodon.asgard.common.UpdateStatusDTO;
 import io.choerodon.asgard.saga.dto.PollSagaTaskInstanceDTO;
 import io.choerodon.asgard.saga.dto.SagaTaskInstanceDTO;
-import org.springframework.cloud.netflix.feign.FeignClient;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @FeignClient(name = "${choerodon.saga.service:asgard-service}")
 public interface SagaConsumerClient {
 
-    @PostMapping("/v1/sagas/tasks/instances/poll")
+    @PostMapping("/v1/ext/sagas/tasks/instances/poll")
     List<SagaTaskInstanceDTO> pollBatch(@RequestBody PollSagaTaskInstanceDTO pollSagaTaskInstanceDTO);
 
 

@@ -1,14 +1,15 @@
 package io.choerodon.resource.permission;
 
-import io.choerodon.swagger.annotation.Permission;
+import java.util.HashSet;
+import java.util.Set;
+
 import org.springframework.core.annotation.Order;
+
+import io.choerodon.core.annotation.Permission;
 import springfox.documentation.spi.DocumentationType;
 import springfox.documentation.spi.service.OperationBuilderPlugin;
 import springfox.documentation.spi.service.contexts.OperationContext;
 import springfox.documentation.swagger.common.SwaggerPluginSupport;
-
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * @author flyleft

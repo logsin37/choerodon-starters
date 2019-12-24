@@ -1,10 +1,12 @@
 package io.choerodon.feign;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.netflix.hystrix.strategy.concurrency.HystrixRequestContext;
-import feign.RequestInterceptor;
-import feign.RequestTemplate;
-import io.choerodon.core.oauth.CustomUserDetails;
+import static io.choerodon.core.variable.RequestVariableHolder.HEADER_ROUTE_RULE;
+import static io.choerodon.core.variable.RequestVariableHolder.HEADER_TOKEN;
+
+import java.util.Collections;
+
+import javax.annotation.PostConstruct;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -14,12 +16,16 @@ import org.springframework.security.jwt.crypto.sign.Signer;
 import org.springframework.security.oauth2.provider.authentication.OAuth2AuthenticationDetails;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
-import java.util.Collections;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.netflix.hystrix.strategy.concurrency.HystrixRequestContext;
+
+import feign.RequestInterceptor;
+import feign.RequestTemplate;
+import io.choerodon.core.oauth.CustomUserDetails;
 
 
 /**
- * 拦截feign请求，为requestTemplate加上oauth token请求头
+ * 拦截feign请求，为requestTemplate加上oauth token与routeRule 请求头
  *
  * @author jiatong.li
  */
@@ -66,18 +72,18 @@ public class FeignRequestInterceptor implements RequestInterceptor {
             if (token == null) {
                 token = OAUTH_TOKEN_PREFIX + JwtHelper.encode(OBJECT_MAPPER.writeValueAsString(defaultUserDetails), signer).getEncoded();
             }
-            template.header(RequestVariableHolder.HEADER_JWT, token);
-            setLabel(template);
+            template.header(HEADER_TOKEN, token);
+            setRouteRule(template);
         } catch (Exception e) {
             LOGGER.error("generate jwt token failed {}", e);
         }
     }
 
-    private void setLabel(RequestTemplate template) {
+    private void setRouteRule(RequestTemplate template) {
         if (HystrixRequestContext.isCurrentThreadInitialized()) {
-            String label = RequestVariableHolder.LABEL.get();
-            if (label != null) {
-                template.header(RequestVariableHolder.HEADER_LABEL, label);
+            String rule = RequestVariableHolder.ROUTE_RULE.get();
+            if (rule != null) {
+                template.header(HEADER_ROUTE_RULE, rule);
             }
         }
 

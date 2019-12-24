@@ -1,18 +1,20 @@
 package io.choerodon.core.oauth;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
+import java.io.Serializable;
+import java.util.*;
+
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 
-import java.io.Serializable;
-import java.util.*;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * 定制的userDetail对象
  *
  * @author wuguokai
  * @author Eugen
+ * @author zongw.lee@gmail.com
  */
 public class CustomUserDetails extends User implements Serializable {
     private static final long serialVersionUID = -3762281463683847665L;
@@ -48,6 +50,8 @@ public class CustomUserDetails extends User implements Serializable {
     private Set<String> clientAutoApproveScopes;
 
     private transient Map<String, Object> additionInfo;
+
+    private String routeRuleCode;
 
     public CustomUserDetails(String username,
                              String password,
@@ -194,88 +198,41 @@ public class CustomUserDetails extends User implements Serializable {
                 : new LinkedHashSet<String>(clientAutoApproveScopes);
     }
 
+    public String getRouteRuleCode() {
+        return routeRuleCode;
+    }
+
+    public void setRouteRuleCode(String routeRuleCode) {
+        this.routeRuleCode = routeRuleCode;
+    }
+
     @Override
     public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (!(o instanceof CustomUserDetails)) {
-            return false;
-        }
-        if (!super.equals(o)) {
-            return false;
-        }
-
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
         CustomUserDetails that = (CustomUserDetails) o;
-
-        if (!userId.equals(that.userId)) {
-            return false;
-        }
-        if (!email.equals(that.email)) {
-            return false;
-        }
-        if (!timeZone.equals(that.timeZone)) {
-            return false;
-        }
-        if (!language.equals(that.language)) {
-            return false;
-        }
-        if (!isAdmin.equals(that.isAdmin)) {
-            return false;
-        }
-        if (!organizationId.equals(that.organizationId)) {
-            return false;
-        }
-        if (!clientId.equals(that.clientId)) {
-            return false;
-        }
-        if (!clientName.equals(that.clientName)) {
-            return false;
-        }
-        if (!clientAccessTokenValiditySeconds.equals(that.clientAccessTokenValiditySeconds)) {
-            return false;
-        }
-        if (!clientAuthorizedGrantTypes.equals(that.clientAuthorizedGrantTypes)) {
-            return false;
-        }
-        if (!clientAutoApproveScopes.equals(that.clientAutoApproveScopes)) {
-            return false;
-        }
-        if (!clientRefreshTokenValiditySeconds.equals(that.clientRefreshTokenValiditySeconds)) {
-            return false;
-        }
-        if (!clientRegisteredRedirectUri.equals(that.clientRegisteredRedirectUri)) {
-            return false;
-        }
-        if (!clientResourceIds.equals(that.clientResourceIds)) {
-            return false;
-        }
-        if (!clientScope.equals(that.clientScope)) {
-            return false;
-        }
-        return additionInfo.equals(that.additionInfo);
+        return Objects.equals(userId, that.userId) &&
+                Objects.equals(email, that.email) &&
+                Objects.equals(timeZone, that.timeZone) &&
+                Objects.equals(language, that.language) &&
+                Objects.equals(organizationId, that.organizationId) &&
+                Objects.equals(isAdmin, that.isAdmin) &&
+                Objects.equals(clientId, that.clientId) &&
+                Objects.equals(clientName, that.clientName) &&
+                Objects.equals(clientAuthorizedGrantTypes, that.clientAuthorizedGrantTypes) &&
+                Objects.equals(clientResourceIds, that.clientResourceIds) &&
+                Objects.equals(clientScope, that.clientScope) &&
+                Objects.equals(clientRegisteredRedirectUri, that.clientRegisteredRedirectUri) &&
+                Objects.equals(clientAccessTokenValiditySeconds, that.clientAccessTokenValiditySeconds) &&
+                Objects.equals(clientRefreshTokenValiditySeconds, that.clientRefreshTokenValiditySeconds) &&
+                Objects.equals(clientAutoApproveScopes, that.clientAutoApproveScopes) &&
+                Objects.equals(additionInfo, that.additionInfo);
     }
 
     @Override
     public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + userId.hashCode();
-        result = 31 * result + email.hashCode();
-        result = 31 * result + timeZone.hashCode();
-        result = 31 * result + language.hashCode();
-        result = 31 * result + organizationId.hashCode();
-        result = 31 * result + additionInfo.hashCode();
-        result = 31 * result + isAdmin.hashCode();
-        result = 31 * result + clientId.hashCode();
-        result = 31 * result + clientName.hashCode();
-        result = 31 * result + clientScope.hashCode();
-        result = 31 * result + clientResourceIds.hashCode();
-        result = 31 * result + clientRegisteredRedirectUri.hashCode();
-        result = 31 * result + clientRefreshTokenValiditySeconds.hashCode();
-        result = 31 * result + clientAutoApproveScopes.hashCode();
-        result = 31 * result + clientAuthorizedGrantTypes.hashCode();
-        result = 31 * result + clientAccessTokenValiditySeconds.hashCode();
-        return result;
+        return Objects.hash(super.hashCode(), userId, email, timeZone, language, organizationId, isAdmin, clientId, clientName, clientAuthorizedGrantTypes, clientResourceIds, clientScope, clientRegisteredRedirectUri, clientAccessTokenValiditySeconds, clientRefreshTokenValiditySeconds, clientAutoApproveScopes, additionInfo);
     }
 
     @Override

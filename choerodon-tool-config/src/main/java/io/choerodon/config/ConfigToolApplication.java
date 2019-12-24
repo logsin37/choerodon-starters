@@ -1,15 +1,17 @@
 package io.choerodon.config;
 
-import io.choerodon.mybatis.MybatisMapperAutoConfiguration;
 import org.springframework.boot.SpringApplication;
+import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+import io.choerodon.mybatis.ChoerodonMybatisAutoConfiguration;
 
 /**
  * {@inheritDoc}
  *
  * @author wuguokai
  */
-@SpringBootApplication(exclude = MybatisMapperAutoConfiguration.class)
+@SpringBootApplication(exclude = ChoerodonMybatisAutoConfiguration.class)
 public class ConfigToolApplication {
     /**
      * 主函数
@@ -18,7 +20,7 @@ public class ConfigToolApplication {
      */
     public static void main(String[] args) {
         SpringApplication app = new SpringApplication(ConfigToolApplication.class);
-        app.setWebEnvironment(false);
+        app.setWebApplicationType(WebApplicationType.NONE);
         app.run(args);
     }
 

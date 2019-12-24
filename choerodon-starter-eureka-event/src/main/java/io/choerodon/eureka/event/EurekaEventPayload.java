@@ -1,14 +1,14 @@
 package io.choerodon.eureka.event;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
-import com.netflix.appinfo.InstanceInfo;
-
 import java.util.Date;
 import java.util.Objects;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.netflix.appinfo.InstanceInfo;
+
 public class EurekaEventPayload {
 
-    private static final String VERSION_STR = "VERSION";
+    private static final String VERSION_STR = "version";
 
     private static final String DEFAULT_VERSION_NAME = "unknown";
 

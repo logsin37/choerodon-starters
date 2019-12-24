@@ -2,6 +2,102 @@
 
 这个项目的所有显著变化都将被记录在这个文件中。
 
+# [0.14.0]
+
+### 修改
+- 更新消息通知 DTO 适应新的表结构
+
+### 新增
+- 添加自定义的`PageableArgumentResolver`使`Pageable`可接受`size=0`以实现size为0的时候返回全部数据
+- `choerodon-starter-feign-replay`新增灰度发布功能
+
+# [0.13.0]
+
+### 新增
+添加`choerodon-starter-webmvc`模块依赖
+
+### 修改
+- 拆分base模块功能至core/mybatis模块中
+- 更新web模块为webmvc模块
+
+### 移除
+移除`choerodon-starter-base`模块依赖
+移除`choerodon-starter-web`模块依赖
+移除`choerodon-starter-mybatis-mapper`模块依赖
+
+# [0.12.0]
+### 新增
+- 数据初始化工具实现删除标记 $DEL 和只插入标记 $XXX
+- Excel 工具类添加导出 excel 2007 的方法
+- 更新消息通知 DTO 添加 WebHook 相关参数
+
+### 修改
+- 修复表元数据提取没有REMARK的问题
+- 重构 websocket 模块新的设计参考文档 choerodon-starter-websocket/Design.md
+- SagaTask返回值为简单类型时直接使用类名生成Demo数据提高体验
+- Mybatis模块修复无法从BaseDTO获取排序数据的问题
+- 跨服务初始化数据Excel名改为 script/meta/micro-service-init-data.xlsx
+- JWT Token 检查依赖 Spring Security 实现，不再使用自定义 Filter
+- 修复 Excel 转化 Json 出现大量空字符串问题
+- 修复 CustomUserDetails hashCode 方法可能出现空指针异常
+
+### 移除
+- 移除 choerodon-starter-statemachine 模块
+
+# [0.11.0]
+
+### 新增
+- 新增mybatis模块，采用依赖的方式使用common mapper
+- 新增Actuator模块，实现一些微服务通用数据的提取
+- 新增Message模块，实现了redis和rabbit的消息队列和订阅机制
+- 新增Redis模块，实现了基于redis的缓存机制
+- 新增Maven插件，实现编译时的一些数据提取
+
+### 修改
+- 完善单元测试提高测试覆盖率
+- 实现长连接代替轮训访问Asgard，优化性能
+- 修复一些其他的Bug和问题
+
+# [0.10.0]
+
+### 新增
+- spring-boot升级到2.0.6.RELEASE
+- spring-cloud升级至Finchley.SR2
+- 添加mybatis模块
+- 添加redis模块
+- 添加hap的message模块
+
+### 修改
+- 状态机添加创建实例接口
+- 修改liquibase初始化工具满足hap需求
+
+# [0.9.3]
+
+### 新增
+- 添加mybatis模块
+- 添加redis模块
+- 添加hap的message模块
+
+### 修改
+- 状态机添加创建实例接口
+- 修改liquibase初始化工具满足hap需求
+
+## [0.9.2]
+
+### 新增
+
+- liquibase初始化工具支持自定义插入id，只有是整数的id才可以插入，否则自动生成
+- tool-config添加了通过configMap初始化配置的方式
+
+### 修改
+
+- 优化了liquibase初始化数据库每个groovy表都要建立jdbc连接的问题
+
+### 修复
+
+- 修复了sqlserver数据库，如果#列为空报incorrect syntax的错误
+ 
+
 ## [0.9.1]
 
 ### 修复
@@ -83,7 +179,7 @@
 
 ### 移除
 
-- 移除`choerodon-starter-hitoa`,`choerodon-starter-oauth-resource`的`cglib`依赖
+- 移除`choerodon-starter-metric`,`choerodon-starter-oauth-resource`的`cglib`依赖
 - 移除模块`choerodon-starter-bus`
 - 移除模块`choerodon-starter-config-monitor`
 

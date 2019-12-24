@@ -1,16 +1,17 @@
 package io.choerodon.liquibase.excel;
 
-import io.choerodon.liquibase.exception.LiquibaseException;
-import liquibase.util.StringUtils;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFCell;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import io.choerodon.liquibase.exception.LiquibaseException;
+import liquibase.util.StringUtils;
 
 /**
  * Excel 子数据读取器
@@ -65,8 +66,8 @@ public class ExcelSeedDataReader {
     private String getCellValueByType(Cell cell) {
         String cellValue = "";
         DataFormatter formatter = new DataFormatter();
-        switch (cell.getCellType()) {
-            case Cell.CELL_TYPE_NUMERIC:
+        switch (cell.getCellTypeEnum()) {
+            case NUMERIC:
                 if (DateUtil.isCellDateFormatted(cell)) {
                     cellValue = formatter.formatCellValue(cell);
                 } else {
@@ -83,19 +84,19 @@ public class ExcelSeedDataReader {
                     }
                 }
                 break;
-            case Cell.CELL_TYPE_STRING:
+            case STRING:
                 cellValue = cell.getStringCellValue();
                 break;
-            case Cell.CELL_TYPE_BOOLEAN:
+            case BOOLEAN:
                 cellValue = String.valueOf(cell.getBooleanCellValue());
                 break;
-            case Cell.CELL_TYPE_FORMULA:
+            case FORMULA:
                 cellValue = String.valueOf(cell.getCellFormula());
                 break;
-            case Cell.CELL_TYPE_BLANK:
+            case BLANK:
                 cellValue = "";
                 break;
-            case Cell.CELL_TYPE_ERROR:
+            case ERROR:
                 cellValue = "";
                 break;
             default:
@@ -133,7 +134,11 @@ public class ExcelSeedDataReader {
                 if (isAllEmpty(row, SKIP_COL + 1)) {
                     continue;
                 }
-                currentTable = getTableData(currentTable, row);
+                if(currentTable != null){
+                    processTableRow(currentTable, row);
+                } else {
+                    logger.warn("跳过无法找到表名的数据:{}", row);
+                }
             }
         }
         addCurrentTable(tables, currentTable);
@@ -180,17 +185,14 @@ public class ExcelSeedDataReader {
         return currentTable;
     }
 
-    private TableData getTableData(TableData currentTable, Row row) {
+    private void processTableRow(TableData currentTable, Row row) {
         TableData.TableRow tableRow = new TableData.TableRow();
         tableRow.setTable(currentTable);
         tableRow.setLineNumber(row.getRowNum() + 1);
         for (int j = SKIP_COL + 1; j < row.getLastCellNum(); j++) {
             Cell cell = row.getCell(j);
-            if (currentTable != null) {
-                addTableCellValue(cell, tableRow, currentTable);
-            }
-            if ((currentTable != null)
-                    && tableRow.getTableCellValues().size() == currentTable.getColumns().size()) {
+            addTableCellValue(cell, tableRow, currentTable);
+            if (tableRow.getTableCellValues().size() == currentTable.getColumns().size()) {
                 // 丢弃多余的数据(如果有，不继续读了)
                 break;
             }
@@ -205,7 +207,6 @@ public class ExcelSeedDataReader {
             }
             currentTable.getTableRows().add(tableRow);
         }
-        return currentTable;
     }
 
     private boolean tableRowIsEmpty(TableData.TableRow tableRow) {
@@ -224,10 +225,23 @@ public class ExcelSeedDataReader {
     }
 
     private void addTableCellValue(Cell cell, TableData.TableRow tableRow, TableData currentTable) {
-        TableData.TableCellValue tableCellValue = new TableData.TableCellValue(cell, tableRow,
-                currentTable.getColumns()
-                        .get(tableRow.getTableCellValues().size()));
-        tableCellValue.setValue(getCellValue(cell));
+        int indexOfTitleColumn = tableRow.getTableCellValues().size();
+        TableData.Column currentTitleColumn = currentTable.getColumns().get(indexOfTitleColumn);
+        String value = getCellValue(cell);
+        if (currentTitleColumn.isGen()) {
+            //判断值是否能转为long
+            try {
+                Long.parseLong(value);
+                tableRow.setGeneratedColumnInserted(true);
+            } catch (NumberFormatException e) {
+                //do nothing
+            }
+        }
+        if (TableData.Column.DEL_FLAG_COLUMN_NAME.equals(currentTitleColumn.getName()) && "1".equals(value)){
+            tableRow.setDeleteFlag(true);
+        }
+        TableData.TableCellValue tableCellValue = new TableData.TableCellValue(cell, tableRow, currentTitleColumn);
+        tableCellValue.setValue(value);
         tableRow.getTableCellValues().add(tableCellValue);
     }
 

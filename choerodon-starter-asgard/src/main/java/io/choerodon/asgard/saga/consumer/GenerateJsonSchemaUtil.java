@@ -1,18 +1,27 @@
 package io.choerodon.asgard.saga.consumer;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.util.StringUtils;
-
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.*;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.util.StringUtils;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 public class GenerateJsonSchemaUtil {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GenerateJsonSchemaUtil.class);
+
+    /**
+     * Primitive types's box class and usual return types.
+     * Refer to {@link Class#isPrimitive()}
+     */
+    private static final List<Class> USUAL_RETURN_TYPES = Arrays.asList(String.class, Boolean.class, Character.class,
+            Byte.class, Short.class, Integer.class, Long.class, Float.class, Double.class,
+            Void.class, Map.class, Enum.class);
 
     private GenerateJsonSchemaUtil() {
     }
@@ -30,9 +39,12 @@ public class GenerateJsonSchemaUtil {
         return value;
     }
 
-    static Object createExampleInstance(final Class<?> claz) {
+    private static Object createExampleInstance(final Class<?> claz) {
         if (claz == null) {
             return null;
+        }
+        if (claz.isPrimitive() || USUAL_RETURN_TYPES.contains(claz)) {
+            return claz.getSimpleName();
         }
         if (claz.isArray() || Collection.class.isAssignableFrom(claz)) {
             return Collections.emptyList();

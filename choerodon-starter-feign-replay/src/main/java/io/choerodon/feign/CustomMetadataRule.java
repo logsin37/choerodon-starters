@@ -1,99 +1,140 @@
 package io.choerodon.feign;
 
-import java.util.*;
+import static io.choerodon.core.variable.RequestVariableHolder.HEADER_ROUTE_RULE;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.security.jwt.JwtHelper;
+import org.springframework.security.jwt.crypto.sign.MacSigner;
+import org.springframework.util.ObjectUtils;
+import org.springframework.util.StringUtils;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+import com.google.gson.Gson;
 import com.netflix.hystrix.strategy.concurrency.HystrixRequestContext;
-import com.netflix.loadbalancer.ILoadBalancer;
 import com.netflix.loadbalancer.Server;
 import com.netflix.loadbalancer.ZoneAvoidanceRule;
 import com.netflix.niws.loadbalancer.DiscoveryEnabledServer;
 
+import io.choerodon.core.oauth.CustomUserDetails;
 
 
 /**
- * 根据标签和权重选择目标server
- * @author crock
+ * 根据用户自定义路由规则选择目标server
+ *
+ * @author zongw.lee@gmail.com
  */
 public class CustomMetadataRule extends ZoneAvoidanceRule {
-    private static final String META_DATA_KEY_LABEL = "GROUP";
-    private static final String META_DATA_KEY_WEIGHT = "WEIGHT";
-    private static final String LABEL_SPLIT = ",";
 
+    private static final String JWT_SPLIT = ".";
+    private static final String HEADER_BEARER = "Bearer";
+    private static final String HEADER_AUTHORIZATION = "Authorization";
+    private static final String HEADER_TOKEN = "token";
+    private static final Gson GSON = new Gson();
+    private static final Logger LOGGER = LoggerFactory.getLogger(CustomMetadataRule.class);
+
+    private CommonProperties commonProperties;
     private Random random = new Random();
+
+    public void setCommonProperties(CommonProperties commonProperties) {
+        this.commonProperties = commonProperties;
+    }
 
     @Override
     public Server choose(Object key) {
-        List<String> labels = getSourceLabel();
-        ILoadBalancer balancer = getLoadBalancer();
-        List<Server> servers = this.getPredicate().getEligibleServers(balancer.getAllServers(), key);
-        Map<Server, Integer> maxLabelServers = new HashMap<>();
-        int maxLabelNumber = -1;
-        int totalWeight = 0;
-        TreeSet<String> labelSet = new TreeSet<>();
-        for (Server server : servers) {
-            int weight = getTargetWeight(extractMetadata(server));
-            List<String> targetLabels = getTargetLabel(extractMetadata(server));
-            if (labels.isEmpty() && targetLabels.isEmpty()) {
-                return server;
-            }
-            labelSet.addAll(labels);
-            labelSet.retainAll(targetLabels);
-            int labelNumber = labelSet.size();
-            if (labelNumber > maxLabelNumber) {
-                maxLabelServers.clear();
-                maxLabelServers.put(server, weight);
-                maxLabelNumber = labelNumber;
-                totalWeight = weight;
-            } else if (labelNumber == maxLabelNumber) {
-                maxLabelServers.put(server, weight);
-                totalWeight += weight;
-            }
-        }
-        if (maxLabelServers.isEmpty()) {
+        LOGGER.info("Start to choose server to route");
+        List<Server> servers = this.getPredicate().getEligibleServers(getLoadBalancer().getAllServers(), key);
+        servers.forEach(v -> LOGGER.info("One of all servers: HOST => {}, IP => {}, Scheme => {}", v.getHost(), v.getPort(), v.getScheme()));
+        if (servers.isEmpty()) {
             return null;
         }
-        int randomWight = random.nextInt(totalWeight);
-        int current = 0;
-        for (Map.Entry<Server, Integer> entry : maxLabelServers.entrySet()) {
-            current += entry.getValue();
-            if (randomWight <= current) {
-                return entry.getKey();
+        // 查询当前访问的CustomUserDetails
+        CustomUserDetails customUserDetails = getCustomUserDetails();
+        // 如果当前是oauth请求用户认证，则不需要做灰度发布策略
+        if (customUserDetails == null) {
+            LOGGER.info("CustomUserDetails is Empty");
+            return getDefaultRouteServer(servers);
+        }
+        if (!StringUtils.isEmpty(customUserDetails.getRouteRuleCode())) {
+            LOGGER.info("Start to handle grayscale launching strategy, Route_Rule: {}", customUserDetails.getRouteRuleCode());
+            List<Server> ruleServers = servers.stream()
+                    .filter(server -> judgeRouteRuleEnable(extractMetadata(server), customUserDetails.getRouteRuleCode()))
+                    .collect(Collectors.toList());
+            if (!ruleServers.isEmpty()) {
+                LOGGER.info("Route to specific server ····");
+                // 包含规则路由
+                return ruleServers.get(random.nextInt(ruleServers.size()));
             }
         }
-        return null;
+
+        return getDefaultRouteServer(servers);
     }
 
-    private List<String> getSourceLabel() {
-        String sourceLabel = null;
-        if (HystrixRequestContext.isCurrentThreadInitialized()) {
-            sourceLabel = RequestVariableHolder.LABEL.get();
+    private CustomUserDetails getCustomUserDetails() {
+        LOGGER.info("Start to get CustomUserDetails");
+        if (RequestContextHolder.getRequestAttributes() == null) {
+            if (!HystrixRequestContext.isCurrentThreadInitialized()) {
+                return null;
+            }
+            String rule = RequestVariableHolder.ROUTE_RULE.get();
+            if (rule == null) {
+                return null;
+            }
+            CustomUserDetails customUserDetails = new CustomUserDetails("default", "unknown", Collections.emptyList());
+            customUserDetails.setRouteRuleCode(rule);
+            return customUserDetails;
         }
-        List<String> labels = Collections.emptyList();
-        if (sourceLabel != null) {
-            labels = Arrays.asList(sourceLabel.split(LABEL_SPLIT));
+        Object token = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest().getAttribute(HEADER_TOKEN);
+        String jwtToken = null;
+        if (!ObjectUtils.isEmpty(token)) {
+            LOGGER.info("Get CustomUserDetails: start to prase jwtToken. Token:{}", token);
+            jwtToken = token.toString().substring(HEADER_BEARER.length()).trim();
+        } else {
+            String authorization = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest().getHeader(HEADER_AUTHORIZATION);
+            if (ObjectUtils.isEmpty(authorization)) {
+                return null;
+            }
+            LOGGER.info("Get CustomUserDetails: start to prase jwtToken. Authorization:{}", authorization);
+            jwtToken = authorization.substring(HEADER_BEARER.length()).trim();
         }
-        return labels;
+        MacSigner macSigner = new MacSigner(commonProperties.getOauthJwtKey());
+        if (!jwtToken.contains(JWT_SPLIT)) {
+            return null;
+        }
+        String userInfo = JwtHelper.decodeAndVerify(jwtToken, macSigner).getClaims();
+        LOGGER.info("CustomUserDetails info, userInfo: {}", userInfo);
+        return GSON.fromJson(userInfo, CustomUserDetails.class);
     }
 
-    private int getTargetWeight(Map<String,String> metadata) {
-        String weightString = metadata.get(META_DATA_KEY_WEIGHT);
-        int weight = 100;
-        if (weightString != null) {
-            weight = Integer.parseInt(weightString);
+    private Server getDefaultRouteServer(List<Server> servers) {
+        List<Server> noRuleServers = servers.stream()
+                .filter(server -> extractMetadata(server).get(HEADER_ROUTE_RULE) == null)
+                .collect(Collectors.toList());
+        noRuleServers.forEach(v -> LOGGER.info("No rule's servers: Host => {}, IP => {}, Scheme => {}", v.getHost(), v.getPort(), v.getScheme()));
+        if (noRuleServers.isEmpty()) {
+            // 随机所有路由
+            LOGGER.info("Route to one of all servers");
+            return servers.get(random.nextInt(servers.size()));
+        } else {
+            // 无规则路由
+            LOGGER.info("Route to one of no rule's servers");
+            return noRuleServers.get(random.nextInt(noRuleServers.size()));
         }
-        return weight;
     }
 
-    private List<String> getTargetLabel(Map<String,String> metadata) {
-        String label = metadata.get(META_DATA_KEY_LABEL);
-        List<String> targetLabels = Collections.emptyList();
-        if (label != null) {
-            targetLabels = Arrays.asList(label.split(LABEL_SPLIT));
-        }
-        return targetLabels;
+    private boolean judgeRouteRuleEnable(Map<String, String> metadata, String routeRuleCode) {
+        String sourceRouteRuleCode = metadata.get(HEADER_ROUTE_RULE);
+        return sourceRouteRuleCode != null && sourceRouteRuleCode.equals(routeRuleCode);
     }
 
-    private Map<String,String> extractMetadata(Server server) {
+    private Map<String, String> extractMetadata(Server server) {
         return ((DiscoveryEnabledServer) server).getInstanceInfo().getMetadata();
     }
 

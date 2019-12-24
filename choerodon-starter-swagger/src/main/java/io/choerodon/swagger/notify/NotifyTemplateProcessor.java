@@ -1,7 +1,11 @@
 package io.choerodon.swagger.notify;
 
-import io.choerodon.core.notify.NotifyBusinessType;
-import io.choerodon.core.notify.NotifyTemplate;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.HashSet;
+import java.util.Set;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.config.BeanPostProcessor;
@@ -9,11 +13,8 @@ import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.util.StringUtils;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.util.HashSet;
-import java.util.Set;
+import io.choerodon.core.notify.NotifyBusinessType;
+import io.choerodon.core.notify.NotifyTemplate;
 
 public class NotifyTemplateProcessor implements BeanPostProcessor {
 
@@ -32,8 +33,7 @@ public class NotifyTemplateProcessor implements BeanPostProcessor {
     public Object postProcessAfterInitialization(Object bean, String beanName) {
         if (bean instanceof NotifyTemplate) {
             NotifyTemplate template = (NotifyTemplate) bean;
-            NotifyTemplateScanData scanData = new NotifyTemplateScanData(template.businessTypeCode(),
-                    template.code(), template.name(), template.title(), template.content(), template.type());
+            NotifyTemplateScanData scanData = new NotifyTemplateScanData(template.businessTypeCode(), template.title(), template.content(), template.type());
             if (validNotifyTemplate(scanData)) {
                 templateScanData.add(scanData);
             }
@@ -41,7 +41,8 @@ public class NotifyTemplateProcessor implements BeanPostProcessor {
         NotifyBusinessType business = AnnotationUtils.findAnnotation(bean.getClass(), NotifyBusinessType.class);
         if (business != null) {
             businessTypeScanData.add(new NotifyBusinessTypeScanData(business.code(), business.name(), business.description(),
-                    business.level().getValue(), business.retryCount(), business.isSendInstantly(), business.isManualRetry(), business.isAllowConfig()));
+                    business.level().getValue(), business.retryCount(), business.isSendInstantly(), business.isManualRetry(), business.isAllowConfig(), business.categoryCode(), business.emailEnabledFlag(),
+                    business.pmEnabledFlag(), business.smsEnabledFlag(), business.webhookEnabledFlag(), business.targetUserType(), business.notifyType().getTypeName()));
         }
         return bean;
     }
@@ -59,14 +60,7 @@ public class NotifyTemplateProcessor implements BeanPostProcessor {
             LOGGER.error("error.notifyTemplate.businessTypeCodeEmpty {}", template);
             return false;
         }
-        if (StringUtils.isEmpty(template.getCode())) {
-            LOGGER.error("error.notifyTemplate.codeEmpty {}", template);
-            return false;
-        }
-        if (StringUtils.isEmpty(template.getName())) {
-            LOGGER.error("error.notifyTemplate.nameEmpty {}", template);
-            return false;
-        }
+
         if (StringUtils.isEmpty(template.getTitle())) {
             LOGGER.error("error.notifyTemplate.titleEmpty {}", template);
             return false;

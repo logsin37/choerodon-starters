@@ -1,19 +1,23 @@
 package io.choerodon.feign;
 
+import static io.choerodon.core.variable.RequestVariableHolder.HEADER_ROUTE_RULE;
+
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import com.netflix.hystrix.strategy.concurrency.HystrixRequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.servlet.handler.HandlerInterceptorAdapter;
 
+import com.netflix.hystrix.strategy.concurrency.HystrixRequestContext;
 
 
 /**
- * 初始化HystrixRequestContext，并存请求的label
- * @author crock
+ * 初始化HystrixRequestContext，存储请求的routeRuleCode
+ * 与RequestVariableHolder结合使用
+ *
+ * @author zongw.lee@gmail.com
  */
 public class HystrixHeaderInterceptor extends HandlerInterceptorAdapter {
 
@@ -25,9 +29,9 @@ public class HystrixHeaderInterceptor extends HandlerInterceptorAdapter {
         if (!HystrixRequestContext.isCurrentThreadInitialized()) {
             HystrixRequestContext.initializeContext();
         }
-        String labelString = request.getHeader(RequestVariableHolder.HEADER_LABEL);
-        logger.debug("X-Eureka-Label:{}", labelString);
-        RequestVariableHolder.LABEL.set(labelString);
+        String routeRule = request.getHeader(HEADER_ROUTE_RULE);
+        logger.debug("Route-Rule:{}", routeRule);
+        RequestVariableHolder.ROUTE_RULE.set(routeRule);
         return true;
     }
 

@@ -1,5 +1,7 @@
 package io.choerodon.core.oauth;
 
+import java.util.Objects;
+
 import org.springframework.security.oauth2.provider.client.BaseClientDetails;
 
 /**
@@ -21,25 +23,15 @@ public class CustomClientDetails extends BaseClientDetails {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (!(o instanceof CustomClientDetails)) {
-            return false;
-        }
-        if (!super.equals(o)) {
-            return false;
-        }
-
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
         CustomClientDetails that = (CustomClientDetails) o;
-
-        return organizationId.equals(that.organizationId);
+        return Objects.equals(organizationId, that.organizationId);
     }
 
     @Override
     public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + organizationId.hashCode();
-        return result;
+        return Objects.hash(super.hashCode(), organizationId);
     }
 }

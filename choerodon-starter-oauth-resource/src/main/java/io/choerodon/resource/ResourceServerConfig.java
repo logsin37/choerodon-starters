@@ -1,24 +1,34 @@
 package io.choerodon.resource;
 
+import java.util.Arrays;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import io.choerodon.resource.permission.PublicPermissionOperationPlugin;
-import io.choerodon.swagger.SwaggerConfig;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.AutoConfigureBefore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass;
 import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.support.ReloadableResourceBundleMessageSource;
+import org.springframework.security.oauth2.provider.expression.OAuth2WebSecurityExpressionHandler;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
+import io.choerodon.core.oauth.CustomUserDetails;
+import io.choerodon.core.oauth.DetailsHelper;
 import io.choerodon.core.oauth.resource.DateDeserializer;
 import io.choerodon.core.oauth.resource.DateSerializer;
+import io.choerodon.core.provider.CustomProvider;
 import io.choerodon.resource.handler.ControllerExceptionHandler;
+import io.choerodon.resource.permission.PublicPermissionOperationPlugin;
+import io.choerodon.swagger.SwaggerConfig;
 
 /**
  * 配置jwtToken的验证规则
@@ -48,12 +58,8 @@ public class ResourceServerConfig {
         return mapper;
     }
 
-    /**
-     * messageBean配置文件
-     *
-     * @return Bean
-     */
     @Bean(name = "messageSource")
+    @ConditionalOnMissingClass("io.choerodon.fnd.util.service.impl.CacheMessageSource")
     public ReloadableResourceBundleMessageSource messageSource() {
         ReloadableResourceBundleMessageSource messageBundle =
                 new ReloadableResourceBundleMessageSource();
@@ -61,6 +67,7 @@ public class ResourceServerConfig {
         messageBundle.setDefaultEncoding("UTF-8");
         return messageBundle;
     }
+
 
     /**
      * ControllerExceptionHandler Bean
@@ -80,5 +87,43 @@ public class ResourceServerConfig {
     @Bean
     public PublicPermissionOperationPlugin permissionSwaggerOperationPlugin() {
         return new PublicPermissionOperationPlugin();
+    }
+
+
+    @Bean
+    @ConditionalOnMissingClass("io.choerodon.hap.core.impl.CustomProviderImpl")
+    public CustomProvider choerodonProvider() {
+        return new CustomProvider() {
+            @Override
+            public String currentLanguage() {
+                CustomUserDetails details = DetailsHelper.getUserDetails();
+                if (details == null) {
+                    return "zh_CN";
+                }
+                return details.getLanguage();
+            }
+
+            @Override
+            public Long currentPrincipal() {
+                CustomUserDetails details = DetailsHelper.getUserDetails();
+                if (details == null) {
+                    return 0L;
+                }
+                return details.getUserId();
+            }
+
+            @Override
+            public Set<String> getSupportedLanguages() {
+                String[] languages = {"zh_CN", "en_US"};
+                return new HashSet<>(Arrays.asList(languages));
+            }
+        };
+    }
+
+    @Bean
+    public OAuth2WebSecurityExpressionHandler oAuth2WebSecurityExpressionHandler(ApplicationContext applicationContext) {
+        OAuth2WebSecurityExpressionHandler expressionHandler = new OAuth2WebSecurityExpressionHandler();
+        expressionHandler.setApplicationContext(applicationContext);
+        return expressionHandler;
     }
 }

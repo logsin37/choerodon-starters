@@ -6,6 +6,8 @@ public class NotifyBusinessTypeScanData {
 
     private String name;
 
+    private String categoryCode;
+
     private String description;
 
     private String level;
@@ -18,12 +20,26 @@ public class NotifyBusinessTypeScanData {
 
     private Boolean isAllowConfig;
 
+    private Boolean emailEnabledFlag;
+
+    private Boolean pmEnabledFlag;
+
+    private Boolean smsEnabledFlag;
+
+    private Boolean webhookEnabledFlag;
+
+    private String[] targetUserType;
+
+    private String notifyType;
+
     public NotifyBusinessTypeScanData() {
     }
 
     public NotifyBusinessTypeScanData(String code, String name, String description,
                                       String level, Integer retryCount,
-                                      Boolean isSendInstantly, Boolean isManualRetry, Boolean isAllowConfig) {
+                                      Boolean isSendInstantly, Boolean isManualRetry, Boolean isAllowConfig,
+                                      String categoryCode, Boolean emailEnabledFlag, Boolean pmEnabledFlag, Boolean smsEnabledFlag, Boolean webhookEnabledFlag,
+                                      String[] targetUserType, String notifyType) {
         this.code = code;
         this.name = name;
         this.description = description;
@@ -32,6 +48,13 @@ public class NotifyBusinessTypeScanData {
         this.isSendInstantly = isSendInstantly;
         this.isManualRetry = isManualRetry;
         this.isAllowConfig = isAllowConfig;
+        this.categoryCode = categoryCode;
+        this.emailEnabledFlag = emailEnabledFlag;
+        this.pmEnabledFlag = pmEnabledFlag;
+        this.smsEnabledFlag = smsEnabledFlag;
+        this.webhookEnabledFlag = webhookEnabledFlag;
+        this.targetUserType = targetUserType;
+        this.notifyType = notifyType;
     }
 
     public String getCode() {
@@ -96,5 +119,61 @@ public class NotifyBusinessTypeScanData {
 
     public void setAllowConfig(Boolean allowConfig) {
         isAllowConfig = allowConfig;
+    }
+
+    public String getCategoryCode() {
+        return categoryCode;
+    }
+
+    public void setCategoryCode(String categoryCode) {
+        this.categoryCode = categoryCode;
+    }
+
+    public Boolean getEmailEnabledFlag() {
+        return emailEnabledFlag;
+    }
+
+    public void setEmailEnabledFlag(Boolean emailEnabledFlag) {
+        this.emailEnabledFlag = emailEnabledFlag;
+    }
+
+    public Boolean getPmEnabledFlag() {
+        return pmEnabledFlag;
+    }
+
+    public void setPmEnabledFlag(Boolean pmEnabledFlag) {
+        this.pmEnabledFlag = pmEnabledFlag;
+    }
+
+    public Boolean getSmsEnabledFlag() {
+        return smsEnabledFlag;
+    }
+
+    public void setSmsEnabledFlag(Boolean smsEnabledFlag) {
+        this.smsEnabledFlag = smsEnabledFlag;
+    }
+
+    public Boolean getWebhookEnabledFlag() {
+        return webhookEnabledFlag;
+    }
+
+    public void setWebhookEnabledFlag(Boolean webhookEnabledFlag) {
+        this.webhookEnabledFlag = webhookEnabledFlag;
+    }
+
+    public String[] getTargetUserType() {
+        return targetUserType;
+    }
+
+    public void setTargetUserType(String[] targetUserType) {
+        this.targetUserType = targetUserType;
+    }
+
+    public String getNotifyType() {
+        return notifyType;
+    }
+
+    public void setNotifyType(String notifyType) {
+        this.notifyType = notifyType;
     }
 }

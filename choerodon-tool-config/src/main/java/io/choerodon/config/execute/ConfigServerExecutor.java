@@ -1,7 +1,16 @@
 package io.choerodon.config.execute;
 
+import java.io.IOException;
+import java.util.*;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+
 import io.choerodon.config.builder.Builder;
 import io.choerodon.config.builder.BuilderFactory;
 import io.choerodon.config.domain.Service;
@@ -13,13 +22,6 @@ import io.choerodon.config.mapper.ZuulRouteMapper;
 import io.choerodon.config.utils.ConfigFileFormat;
 import io.choerodon.config.utils.InitConfigProperties;
 import io.choerodon.core.exception.CommonException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.io.IOException;
-import java.util.*;
-import java.util.stream.Collectors;
 
 
 public class ConfigServerExecutor extends AbstractExecutor {
@@ -54,6 +56,7 @@ public class ConfigServerExecutor extends AbstractExecutor {
     @Transactional(rollbackFor = Exception.class)
     public void execute(InitConfigProperties properties, String configFile) throws IOException {
         String serviceName = properties.getService().getName();
+        String version = properties.getService().getVersion();
         createService(serviceName);
         Map<String, Object> map = parseFileToMap(configFile);
         map = executeInternal(properties, map);
@@ -63,20 +66,27 @@ public class ConfigServerExecutor extends AbstractExecutor {
         ServiceConfig queryServiceConfig = new ServiceConfig();
         queryServiceConfig.setServiceId(service.getId());
         queryServiceConfig.setDefault(true);
-        ServiceConfig serviceConfig = serviceConfigMapper.selectOne(queryServiceConfig);
-        if (serviceConfig == null) {
-            serviceConfig = new ServiceConfig(serviceName + "." + System.currentTimeMillis(), true, service.getId(),
+        List<ServiceConfig> configs = serviceConfigMapper.select(queryServiceConfig);
+        if (configs.isEmpty()) {
+            //新增
+            ServiceConfig serviceConfig = new ServiceConfig(serviceName + "." + System.currentTimeMillis(), true, service.getId(),
                     objectMapper.writeValueAsString(map), CONFIG_BY_TOOL, new Date(System.currentTimeMillis()));
-            serviceConfig.setConfigVersion(properties.getService().getVersion());
+            serviceConfig.setConfigVersion(version);
             if (serviceConfigMapper.insert(serviceConfig) != 1) {
                 throw new CommonException("error.serviceConfig.insert");
             }
+        } else if (configs.size() > 1) {
+            //异常
+            String message = serviceName + " has multiple default configs";
+            throw new CommonException(message);
         } else {
+            //更新
+            ServiceConfig serviceConfig = configs.get(0);
             Map<String, Object> baseMap = objectMapper.readValue(serviceConfig.getValue(), Map.class);
             Map<String, Object> mergeMap = mergeMap(baseMap, map);
             String newJson = objectMapper.writeValueAsString(mergeMap);
             serviceConfig.setValue(newJson);
-            serviceConfig.setConfigVersion(properties.getService().getVersion());
+            serviceConfig.setConfigVersion(version);
             if (serviceConfigMapper.updateByPrimaryKeySelective(serviceConfig) != 1) {
                 throw new CommonException("error.serviceConfig.update");
             }

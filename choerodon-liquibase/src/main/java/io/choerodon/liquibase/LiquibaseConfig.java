@@ -1,10 +1,11 @@
 package io.choerodon.liquibase;
 
-import io.choerodon.liquibase.addition.ProfileMap;
+import javax.sql.DataSource;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 
-import javax.sql.DataSource;
+import io.choerodon.liquibase.addition.ProfileMap;
 
 
 /**
@@ -16,7 +17,7 @@ public class LiquibaseConfig {
 
     @Bean
     LiquibaseExecutor getLiquibaseExecutor() {
-        return new LiquibaseExecutor(dataSource, getProfileMap());
+        return new LiquibaseExecutor(dataSource);
     }
 
     @Bean

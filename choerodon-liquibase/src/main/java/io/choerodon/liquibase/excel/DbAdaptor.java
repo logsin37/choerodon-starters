@@ -1,20 +1,23 @@
 package io.choerodon.liquibase.excel;
 
-import io.choerodon.liquibase.addition.AdditionDataSource;
-import io.choerodon.liquibase.exception.LiquibaseException;
-import io.choerodon.liquibase.helper.LiquibaseHelper;
-import liquibase.util.StringUtils;
+import static io.choerodon.liquibase.excel.TableData.TableCellValue;
+
+import java.sql.*;
+import java.sql.Date;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.*;
+
+import javax.sql.DataSource;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.sql.DataSource;
-import java.sql.*;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.*;
-import java.util.Date;
-
-import static io.choerodon.liquibase.excel.TableData.TableCellValue;
+import io.choerodon.liquibase.addition.AdditionDataSource;
+import io.choerodon.liquibase.exception.LiquibaseException;
+import io.choerodon.liquibase.helper.LiquibaseHelper;
+import io.choerodon.liquibase.utils.CellDataConverter;
+import liquibase.util.StringUtils;
 
 /**
  * DbAdaptor，包含数据库连接信息及基本的操作语句
@@ -27,7 +30,7 @@ public class DbAdaptor {
     private static final String ZH_CN = "zh_CN";
     private static final String SQL_UPDATE = "update ";
     private static final String SQL_WHERE = " where  ";
-    private static final String SQL_SET =" set ";
+    private static final String SQL_SET = " set ";
 
     static {
         SQL_TYPE_MAP.put("VARCHAR", Types.VARCHAR);
@@ -42,11 +45,10 @@ public class DbAdaptor {
     Map<String, String> tableInsertSqlMap = new HashMap<>();
     Map<String, String> tableUpdateSqlMap = new HashMap<>();
     Map<String, String> tableUpdateTlSqlMap = new HashMap<>();
-    private SimpleDateFormat sdfL = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-    private SimpleDateFormat sdfS = new SimpleDateFormat("yyyy-MM-dd");
     private Logger logger = LoggerFactory.getLogger(getClass());
     private DataSource dataSource;
     private Connection connection;
+    private Map<String, Connection> connectionMap = new HashMap<>();
     private ExcelDataLoader dataProcessor;
     private boolean useSeq = false;
     private boolean override = true;
@@ -74,9 +76,16 @@ public class DbAdaptor {
         this.override = override;
     }
 
+    //这里的连接不在这个方法关闭，而在closeConnection方法中关闭
+    @SuppressWarnings("squid:S2095")
     public void initConnection() throws SQLException {
         connection = dataSource.getConnection();
         connection.setAutoCommit(false);
+        for (String table: AdditionDataSource.getTablesMap().keySet()){
+            Connection conn = AdditionDataSource.getTablesMap().get(table).getDataSource().getConnection();
+            conn.setAutoCommit(false);
+            connectionMap.put(table, conn);
+        }
     }
 
     /**
@@ -102,6 +111,25 @@ public class DbAdaptor {
                 }
             }
         }
+        for (Connection connection:connectionMap.values()){
+            if(connection != null){
+                try (Connection c = connection) {
+                    if (commit) {
+                        c.commit();
+                    } else {
+                        c.rollback();
+                    }
+                } catch (SQLException e) {
+                    logger.error("commit or rollback exception: {}", e);
+                } finally {
+                    try {
+                        connection.close();
+                    } catch (SQLException e) {
+                        logger.error("close connect exception: {}", e);
+                    }
+                }
+            }
+        }
     }
 
     protected Connection getConnection() {
@@ -119,18 +147,75 @@ public class DbAdaptor {
         if (tableRow.isProcessFlag()) {
             return 0;
         }
+        if (tableRow.isDeleteFlag()) {
+            tableRow.setProcessFlag(true);
+        }
         Long cu = checkExists(tableRow);
-        if (cu == null && tableRow.canInsert()) {
-            doInsert(tableRow);
-            doInsertTl(tableRow);
+        if (cu == null && tableRow.canInsert() && !tableRow.isDeleteFlag()) {
+            if (doInsert(tableRow) > 0){
+                doInsertTl(tableRow);
+            }
             return 1;
         } else if (cu != null && cu >= 0) {
             tableRow.setProcessFlag(true);
-            doInsertTl(tableRow);
+            if (tableRow.isDeleteFlag()){
+                doDelete(tableRow);
+                doDeleteTL(tableRow);
+            } else {
+                doInsertTl(tableRow);
+            }
             return 1;
         }
-
         return 0;
+    }
+
+    protected int doDelete(TableData.TableRow tableRow) throws SQLException {
+        TableCellValue genTableCellValue = null;
+        for (TableCellValue tableCellValue : tableRow.getTableCellValues()) {
+            if (tableCellValue.getColumn().isGen() || tableCellValue.getColumn().isUnique()) {
+                genTableCellValue = tableCellValue;
+                break;
+            }
+        }
+        if (genTableCellValue == null){
+            return 0;
+        }
+        StringBuilder sql = new StringBuilder();
+        sql.append("DELETE FROM ");
+        sql.append(tableRow.getTable().getName());
+        sql.append(" WHERE ");
+        sql.append(genTableCellValue.getColumn().getName());
+        sql.append("=?");
+        try(PreparedStatement statement = connection.prepareStatement(sql.toString())){
+            setParam(statement, genTableCellValue, 1);
+            return statement.executeUpdate();
+        }
+    }
+
+    protected int doDeleteTL(TableData.TableRow tableRow) throws SQLException {
+        if(tableRow.getTable().getLangs().isEmpty()){
+            return 0;
+        }
+        TableCellValue genTableCellValue = null;
+        for (TableCellValue tableCellValue : tableRow.getTableCellValues()) {
+            if (tableCellValue.getColumn().isGen() || tableCellValue.getColumn().isUnique()) {
+                genTableCellValue = tableCellValue;
+                break;
+            }
+        }
+        if (genTableCellValue == null){
+            return 0;
+        }
+        StringBuilder sql = new StringBuilder();
+        sql.append("DELETE FROM ");
+        sql.append(tlTableName(tableRow.getTable().getName()));
+        sql.append(" WHERE ");
+        sql.append(genTableCellValue.getColumn().getName());
+        sql.append("=?");
+        try(PreparedStatement statement = connection.prepareStatement(sql.toString())){
+            setParam(statement, genTableCellValue, 1);
+            return statement.executeUpdate();
+        }
     }
 
     /**
@@ -167,11 +252,22 @@ public class DbAdaptor {
         List<TableCellValue> params = new ArrayList<>();
         for (TableData.TableCellValue tableCellValue : tableRow.getTableCellValues()) {
             if (tableCellValue.getColumn().isUnique()) {
-                list.add(tableCellValue.getColumn().getName() + (StringUtils.isEmpty(tableCellValue.getValue()) ? " IS " : " = ") + "?");
-                params.add(tableCellValue);
+                String value = tableCellValue.getValue();
+                String tableName = tableCellValue.getColumn().getName();
+                if (StringUtils.isEmpty(value)) {
+                    list.add(tableName + " IS NULL");
+                } else {
+                    list.add(tableName + " = ?");
+                    params.add(tableCellValue);
+                }
             }
         }
         sb.append(StringUtils.join(list, " AND "));
+        Connection connection = this.connection;
+        logger.warn("connection map : {}", connectionMap);
+        if(connectionMap.containsKey(tableRow.getTable().getName())){
+            connection = connectionMap.get(tableRow.getTable().getName());
+        }
         try (PreparedStatement ps = connection.prepareStatement(sb.toString())) {
             int index = 1;
             for (TableCellValue tableCellValue : params) {
@@ -208,9 +304,9 @@ public class DbAdaptor {
      * 更新TableRow.
      * 调用此方法之前,需要确保所有值已就绪。
      *
-     * @param tableRow 要更新的TableRow
+     * @param tableRow        要更新的TableRow
      * @param excludedColumns 要排除的列的集合
-     * @param logInfo 日志集合
+     * @param logInfo         日志集合
      * @return update count
      * @throws SQLException SQL异常
      */
@@ -220,22 +316,25 @@ public class DbAdaptor {
         List<TableCellValue> uniques = new ArrayList<>();
         List<TableCellValue> normals = new ArrayList<>();
         for (TableData.TableCellValue tableCellValue : tableRow.getTableCellValues()) {
+            if (tableCellValue.getColumn().isDeleteFlag()){
+                continue;
+            }
             if (tableCellValue.isFormula() && !tableCellValue.isValuePresent()) {
                 dataProcessor.tryUpdateCell(tableCellValue);
             }
             if (tableCellValue.getColumn().isGen()) {
                 genTableCellValue = tableCellValue;
             } else if (tableCellValue.getColumn().isUnique()) {
-                if (!excluded(tableCellValue.getColumn().getName(), excludedColumns)) {
-                    uniques.add(tableCellValue);
-                } else {
+                if (tableCellValue.getColumn().isOnlyInsert() || excluded(tableCellValue.getColumn().getName(), excludedColumns)) {
                     logInfo.add(processLog(tableRow, tableCellValue));
+                } else {
+                    uniques.add(tableCellValue);
                 }
             } else {
-                if (!excluded(tableCellValue.getColumn().getName(), excludedColumns)) {
-                    normals.add(tableCellValue);
-                } else {
+                if (tableCellValue.getColumn().isOnlyInsert() || excluded(tableCellValue.getColumn().getName(), excludedColumns)) {
                     logInfo.add(processLog(tableRow, tableCellValue));
+                } else {
+                    normals.add(tableCellValue);
                 }
             }
         }
@@ -248,6 +347,10 @@ public class DbAdaptor {
         }
         //更新表的sql
         String sql = prepareTableUpdateSql(tableRow, uniques, normals);
+        Connection connection = this.connection;
+        if(connectionMap.containsKey(tableRow.getTable().getName())){
+            connection = connectionMap.get(tableRow.getTable().getName());
+        }
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             int index = 1;
             for (TableCellValue tableCellValue : normals) {
@@ -371,26 +474,51 @@ public class DbAdaptor {
      */
     protected Long doInsert(TableData.TableRow tableRow) throws SQLException {
         String sql = prepareInsertSql(tableRow);
-        Long genVal = null;
+        if (sql == null){
+            tableRow.setProcessFlag(true);
+            return 1L;
+        }
+        long genVal = 0L;
         TableData.TableCellValue genTableCellValue = null;
+        boolean isGeneratedColumnInserted = tableRow.isGeneratedColumnInserted();
+        TableData table = tableRow.getTable();
+        String tableName = table.getName();
+        long maxId = table.getMaxId();
+        Connection connection = this.connection;
+        if(connectionMap.containsKey(tableRow.getTable().getName())){
+            connection = connectionMap.get(tableRow.getTable().getName());
+        }
         try (PreparedStatement ps = connection.prepareStatement(sql,
                 PreparedStatement.RETURN_GENERATED_KEYS)) {
-            int nn = 1;
+            int count = 1;
             for (TableData.TableCellValue tableCellValue : tableRow.getTableCellValues()) {
                 if (tableCellValue.getColumn().isGen()) {
                     genTableCellValue = tableCellValue;
-                    if (sequencePk()) {
-                        genVal = getSeqNextVal(tableRow.getTable().getName());
-                        ps.setLong(nn++, genVal);
+                    if (isGeneratedColumnInserted) {
+                        genVal = Long.valueOf(genTableCellValue.getValue());
+                        ps.setLong(count++, genVal);
+                        //记录当前插入数据手动设置id的最大值
+                        table.setMaxId(genVal > maxId ? genVal : maxId);
+                    } else if (sequencePk()) {
+                        genVal = getSeqNextVal(tableName);
+                        if (genVal < maxId) {
+                            //由于使用excel中手动设置的id,这种情况后续使用sequence.nextval的值可能导致主键冲突，所以要更新一下sequence的值
+                            long step = maxId - genVal;
+                            updateSequence(tableName, step);
+                            genVal = getSeqNextVal(tableName);
+                        }
+                        if (genVal == maxId) {
+                            genVal = getSeqNextVal(tableName);
+                        }
+                        ps.setLong(count++, genVal);
                     }
                     continue;
                 }
-                if (tableCellValue.getColumn().getLang() == null
-                        || ZH_CN.equals(tableCellValue.getColumn().getLang())) {
+                if ((tableCellValue.getColumn().getLang() == null || ZH_CN.equals(tableCellValue.getColumn().getLang())) && !tableCellValue.getColumn().isDeleteFlag()) {
                     if (!tableCellValue.isValuePresent() && tableCellValue.isFormula()) {
-                        ps.setLong(nn++, -1L);
+                        ps.setLong(count++, -1L);
                     } else {
-                        setParam(ps, tableCellValue, nn++);
+                        setParam(ps, tableCellValue, count++);
                     }
                 }
             }
@@ -398,8 +526,7 @@ public class DbAdaptor {
                 ps.executeUpdate();
                 tableRow.setInsertFlag(true);
             } catch (SQLException sqle) {
-                logger.error("[{}]error insert row:{}  sql:{}",
-                        tableRow.getTable().getName(), tableRow, sql);
+                logger.error("[{}]error insert row:{}  sql:{}", tableName, tableRow, sql);
                 throw sqle;
             }
             logger.info("insert row:{}", tableRow);
@@ -415,7 +542,7 @@ public class DbAdaptor {
             }
         }
         if (genTableCellValue != null) {
-            genTableCellValue.updateValue("" + genVal);
+            genTableCellValue.updateValue(String.valueOf(genVal));
         }
         tableRow.setProcessFlag(true);
 
@@ -518,6 +645,10 @@ public class DbAdaptor {
         if (genTableCellValue != null) {
             sb.append(genTableCellValue.getColumn().getName()).append("=?");
         }
+        Connection connection = this.connection;
+        if(connectionMap.containsKey(tableRow.getTable().getName())){
+            connection = connectionMap.get(tableRow.getTable().getName());
+        }
         try (PreparedStatement ps = connection.prepareStatement(sb.toString())) {
             ps.setLong(1, value);
             if (genTableCellValue != null) {
@@ -537,19 +668,25 @@ public class DbAdaptor {
     private void setParam(PreparedStatement ps,
                           TableData.TableCellValue tableCellValue,
                           int nn) throws SQLException {
-        Object vv = convertDataType(tableCellValue.getValue(), tableCellValue.getColumn().getType());
-        if (vv == null) {
+        String value = tableCellValue.getValue();
+        String type = tableCellValue.getColumn().getType();
+        Object object = CellDataConverter.covert(value, type);
+        if (object == null) {
             ps.setNull(nn, SQL_TYPE_MAP.get(tableCellValue.getColumn().getType()));
-        } else if (vv instanceof String) {
-            ps.setString(nn, (String) vv);
-        } else if (vv instanceof Long) {
-            ps.setLong(nn, (Long) vv);
-        } else if (vv instanceof Date) {
-            ps.setDate(nn, new java.sql.Date(((Date) vv).getTime()));
-        } else if (vv instanceof Double) {
-            ps.setDouble(nn, (Double) vv);
+        } else if (object instanceof String) {
+            ps.setString(nn, (String) object);
+        } else if (object instanceof Long) {
+            ps.setLong(nn, (Long) object);
+        } else if(object instanceof java.util.Date){
+            ps.setDate(nn, new Date(((java.util.Date) object).getTime()));
+        } else if (object instanceof LocalDate) {
+            ps.setDate(nn, Date.valueOf((LocalDate) object));
+        } else if (object instanceof LocalDateTime) {
+            ps.setDate(nn, Date.valueOf(((LocalDateTime) object).toLocalDate()));
+        } else if (object instanceof Double) {
+            ps.setDouble(nn, (Double) object);
         } else {
-            ps.setObject(nn, vv);
+            ps.setObject(nn, object);
         }
     }
 
@@ -571,6 +708,10 @@ public class DbAdaptor {
         sb.append(" AND LANG=?");
 
         String sql = sb.toString();
+        Connection connection = this.connection;
+        if(connectionMap.containsKey(tableRow.getTable().getName())){
+            connection = connectionMap.get(tableRow.getTable().getName());
+        }
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setObject(1, genTableCellValue.getValue());
             ps.setObject(2, lang);
@@ -596,8 +737,14 @@ public class DbAdaptor {
             }
         }
         if (allIsUpperCase) {
+            if(tableName.endsWith("_B")){
+                tableName = tableName.substring(0, tableName.length() - 2);
+            }
             return tableName + "_TL";
         } else {
+            if(tableName.endsWith("_b")){
+                tableName = tableName.substring(0, tableName.length() - 2);
+            }
             return tableName + "_tl";
         }
     }
@@ -658,6 +805,10 @@ public class DbAdaptor {
         sb.append("?)");
 
         String sql = sb.toString();
+        Connection connection = this.connection;
+        if(connectionMap.containsKey(tableRow.getTable().getName())){
+            connection = connectionMap.get(tableRow.getTable().getName());
+        }
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             int nn = 1;
             for (TableData.TableCellValue tableCellValue : values) {
@@ -678,60 +829,46 @@ public class DbAdaptor {
 
     }
 
-    protected Object convertDataType(String value, String type) {
-        if (StringUtils.isEmpty(value)) {
-            return null;
-        }
-        if ("DATE".equalsIgnoreCase(type)) {
-            try {
-                if (value.length() <= 10) {
-                    return sdfS.parse(value);
-                }
-                return sdfL.parse(value);
-            } catch (ParseException e) {
-                throw new LiquibaseException(e);
-            }
-        }
-        if ("DECIMAL".equalsIgnoreCase(type) || "NUMBER".equalsIgnoreCase(type)
-                || "BIGINT".equalsIgnoreCase(type)) {
-            if (value.length() == 0) {
-                return null;
-            }
-            if (value.contains(".")) {
-                return Double.parseDouble(value);
-            }
-            return Long.parseLong(value);
-        }
-        return value;
-
-    }
-
     protected String prepareInsertSql(TableData.TableRow tableRow) {
-        String sql = tableInsertSqlMap.get(tableRow.getTable().getName());
+        boolean isGeneratedColumnInserted = tableRow.isGeneratedColumnInserted();
+        String tableName = tableRow.getTable().getName();
+        String sqlKey = tableName + "#" + isGeneratedColumnInserted;
+        String sql = tableInsertSqlMap.get(sqlKey);
         if (sql == null) {
             StringBuilder sb = new StringBuilder();
-            sb.append("INSERT INTO ").append(tableRow.getTable().getName()).append("(");
-            int cc = 0;
+            sb.append("INSERT INTO ").append(tableName).append("(");
+            int count = 0;
             for (TableData.TableCellValue tableCellValue : tableRow.getTableCellValues()) {
-                if (tableCellValue.getColumn().isGen() && !sequencePk()) {
+                if (tableCellValue.getColumn().isDeleteFlag()){
+                        continue;
+                }
+                boolean isGen = tableCellValue.getColumn().isGen();
+                if (isGen && !isGeneratedColumnInserted && !sequencePk()) {
                     continue;
                 }
                 if (tableCellValue.getColumn().getLang() == null
                         || ZH_CN.equals(tableCellValue.getColumn().getLang())) {
-                    cc++;
+                    count++;
                     sb.append(tableCellValue.getColumn().getName());
                     sb.append(",");
                 }
             }
             sb.deleteCharAt(sb.length() - 1);
             sb.append(") VALUES (");
-            for (int i = 0; i < cc; i++) {
+            for (int i = 0; i < count; i++) {
                 sb.append("?,");
             }
             sb.deleteCharAt(sb.length() - 1);
             sb.append(")");
             sql = sb.toString();
-            tableInsertSqlMap.put(tableRow.getTable().getName(), sql);
+            if (helper.isSqlServer() && isGeneratedColumnInserted) {
+                StringBuilder builder = new StringBuilder();
+                builder.append("set IDENTITY_INSERT ").append(tableName).append(" ").append("on;");
+                builder.append(sql).append(";");
+                builder.append("set IDENTITY_INSERT ").append(tableName).append(" ").append("off");
+                sql = builder.toString();
+            }
+            tableInsertSqlMap.put(sqlKey, sql);
         }
         return sql;
     }
@@ -739,6 +876,10 @@ public class DbAdaptor {
     protected Long getSeqNextVal(String tableName) throws SQLException {
         StringBuilder builder = new StringBuilder();
         builder.append("select ").append(tableName).append("_s.nextval from dual");
+        Connection connection = this.connection;
+        if(connectionMap.containsKey(tableName)){
+            connection = connectionMap.get(tableName);
+        }
         try (PreparedStatement ps = connection.prepareStatement(builder.toString())) {
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
@@ -748,6 +889,38 @@ public class DbAdaptor {
                 throw e;
             }
         }
+    }
+
+    private void updateSequence(String tableName, long step) throws SQLException {
+        long defaultStep = 1L;
+        StringBuilder builder = new StringBuilder();
+        String alterSql = builder.append("alter sequence ").append(tableName).append("_s increment by ").toString();
+        String sql = alterSql + step;
+        execUpdateSequence(sql, tableName);
+
+        getSeqNextVal(tableName);
+
+        sql = alterSql + defaultStep;
+        execUpdateSequence(sql, tableName);
+    }
+
+    private void execUpdateSequence(String sql, String table) throws SQLException {
+        PreparedStatement statement = null;
+        try {
+            Connection connection = this.connection;
+            if(connectionMap.containsKey(table)){
+                connection = connectionMap.get(table);
+            }
+            statement = connection.prepareStatement(sql);
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            throw e;
+        } finally {
+            if (statement != null) {
+                statement.close();
+            }
+        }
+
     }
 
     protected boolean sequencePk() {

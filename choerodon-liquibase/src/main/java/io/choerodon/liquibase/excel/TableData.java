@@ -1,16 +1,18 @@
 package io.choerodon.liquibase.excel;
 
-import io.choerodon.liquibase.exception.LiquibaseException;
-import liquibase.util.StringUtils;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.Sheet;
-
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Sheet;
+
+import io.choerodon.liquibase.exception.LiquibaseException;
+import liquibase.util.StringUtils;
+
 /**
  * Excel 数据对象
+ *
  * @author dongfan117@gmail.com
  */
 public class TableData {
@@ -20,10 +22,24 @@ public class TableData {
     private Set<String> langs = new HashSet<>();
     private int startLine;
     private int startCol;
+
+    /**
+     * 在使用序列的数据库里，记录excel里插入数据中，
+     * 手动设置id的最大值(即excel 中带*的id列值为整数，这种情况下使用该值插入，而不使用sequence自动生成的值；如果是字符串，则使用sequence生成的值插入)
+     */
+    private long maxId;
     private String name;
     private List<Column> columns = new ArrayList<>();
     private List<Column> uniqueColumns = new ArrayList<>();
     private List<TableRow> tableRows = new ArrayList<>();
+
+    public long getMaxId() {
+        return maxId;
+    }
+
+    public void setMaxId(long maxId) {
+        this.maxId = maxId;
+    }
 
     public int getStartLine() {
         return startLine;
@@ -176,10 +192,13 @@ public class TableData {
     }
 
     public static class Column {
+        public static final String DEL_FLAG_COLUMN_NAME = "$DEL";
         private boolean gen = false;
         private String type = "VARCHAR";
         private String name;
         private boolean unique = false;
+        private boolean onlyInsert = false;
+        private boolean deleteFlag = false;
 
         private String lang = null;
 
@@ -201,14 +220,20 @@ public class TableData {
 
         private void setName(String originName) {
             this.name = originName;
+            if (DEL_FLAG_COLUMN_NAME.equals(originName)){
+                deleteFlag = true;
+                return;
+            }
             if (originName.startsWith("*")) {
                 name = originName.substring(1);
                 gen = true;
             } else if (originName.startsWith("#")) {
                 unique = true;
                 name = originName.substring(1);
+            } else if (originName.startsWith("$") || originName.startsWith("@")) {
+                onlyInsert = true;
+                name = originName.substring(1);
             }
-
             int sem = name.indexOf(':');
             if (sem > 0) {
                 String localLang = name.substring(sem + 1);
@@ -218,9 +243,12 @@ public class TableData {
                 }
                 this.lang = localLang;
             }
+            if (name.endsWith("_DATE")){
+                type = "DATE";
+            }
             int lb = name.indexOf('(');
             if (lb > 0) {
-                type = name.substring(lb + 1, name.indexOf(')')).trim();
+                type = name.substring(lb + 1, name.indexOf(')')).trim().toUpperCase();
                 name = name.substring(0, lb).trim();
             }
         }
@@ -231,6 +259,14 @@ public class TableData {
 
         public String getLang() {
             return lang;
+        }
+
+        public boolean isOnlyInsert() {
+            return onlyInsert;
+        }
+
+        public boolean isDeleteFlag() {
+            return deleteFlag;
         }
 
         @Override
@@ -249,10 +285,17 @@ public class TableData {
         private boolean existsFlag = false;
         private boolean insertFlag = false;
         private boolean updateFlag = false;
+        private boolean deleteFlag = false;
+        /**
+         * 自增列(带*的列，只能有一个)是否可以使用excel里的value做值插入
+         * 只有值为整数的情况下才能插入，其他情况自增长
+         */
+        private boolean generatedColumnInserted = false;
 
 
         /**
          * 是否是当前TD
+         *
          * @return boolean
          */
         public boolean present() {
@@ -352,6 +395,22 @@ public class TableData {
 
         public void setUpdateFlag(boolean updateFlag) {
             this.updateFlag = updateFlag;
+        }
+
+        public boolean isGeneratedColumnInserted() {
+            return generatedColumnInserted;
+        }
+
+        public void setGeneratedColumnInserted(boolean generatedColumnInserted) {
+            this.generatedColumnInserted = generatedColumnInserted;
+        }
+
+        public boolean isDeleteFlag() {
+            return deleteFlag;
+        }
+
+        public void setDeleteFlag(boolean deleteFlag) {
+            this.deleteFlag = deleteFlag;
         }
     }
 
@@ -474,6 +533,8 @@ public class TableData {
         public Column getColumn() {
             return column;
         }
+
+
     }
 
 }

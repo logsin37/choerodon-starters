@@ -1,6 +1,7 @@
 package io.choerodon.resource.filter
 
 import io.choerodon.core.variable.RequestVariableHolder
+import io.choerodon.resource.security.JwtTokenExtractor
 import org.junit.runner.RunWith
 import org.powermock.api.mockito.PowerMockito
 import org.powermock.core.classloader.annotations.PrepareForTest
@@ -27,7 +28,7 @@ class JwtTokenExtractorSpec extends Specification {
         def headers = PowerMockito.mock(Enumeration)
         PowerMockito.when(headers.hasMoreElements()).thenReturn(true)
         PowerMockito.when(headers.nextElement()).thenReturn("af30f120-ad1d-4b84-9f11-0f8bf34547c6").thenReturn("Bearer af30f120-ad1d-4b84-9f11-0f8bf34547c6")
-        request.getHeaders(RequestVariableHolder.HEADER_JWT) >> { return headers }
+        request.getHeaders(RequestVariableHolder.HEADER_TOKEN) >> { return headers }
         when: "方法调用"
         jwtTokenExtractor.extract(request)
         then: "结果分析"
@@ -40,7 +41,7 @@ class JwtTokenExtractorSpec extends Specification {
         def headers = PowerMockito.mock(Enumeration)
         PowerMockito.when(headers.hasMoreElements()).thenReturn(true).thenReturn(false)
         PowerMockito.when(headers.nextElement()).thenReturn("af30f120-ad1d-4b84-9f11-0f8bf34547c6").thenReturn("Bearer af30f120-ad1d-4b84-9f11-0f8bf34547c6")
-        request.getHeaders(RequestVariableHolder.HEADER_JWT) >> { return headers }
+        request.getHeaders(RequestVariableHolder.HEADER_TOKEN) >> { return headers }
         when: "方法调用"
         jwtTokenExtractor.extract(request)
         then: "结果分析"

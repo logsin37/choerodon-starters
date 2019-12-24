@@ -1,5 +1,24 @@
 package io.choerodon.asgard;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.concurrent.*;
+
+import javax.sql.DataSource;
+
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.PropertySource;
+import org.springframework.core.env.Environment;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.PlatformTransactionManager;
+
 import io.choerodon.asgard.common.ApplicationContextHelper;
 import io.choerodon.asgard.property.PropertyData;
 import io.choerodon.asgard.property.PropertyDataProcessor;
@@ -20,24 +39,11 @@ import io.choerodon.asgard.schedule.JobTaskProcessor;
 import io.choerodon.asgard.schedule.ScheduleConsumer;
 import io.choerodon.asgard.schedule.ScheduleProperties;
 import io.choerodon.asgard.schedule.feign.ScheduleConsumerClient;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.core.env.Environment;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.transaction.PlatformTransactionManager;
-
-import javax.sql.DataSource;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.util.concurrent.*;
 
 @Configuration
+@EnableFeignClients
 @EnableConfigurationProperties({SagaProperties.class, ScheduleProperties.class})
+@PropertySource("classpath:asgard-client-hystrix-feign-config.properties")
 public class AsgardAutoConfiguration {
 
     @Value("${spring.application.name}")
